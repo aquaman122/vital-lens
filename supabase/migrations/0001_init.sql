@@ -89,6 +89,7 @@ end;
 $$;
 
 revoke all on function public.vl_ingest(jsonb) from public;
+revoke execute on function public.vl_ingest(jsonb) from anon, authenticated;
 grant execute on function public.vl_ingest(jsonb) to anon;
 
 -- 집계 뷰 (대시보드 서버 전용 — secret key로 조회)
@@ -151,3 +152,6 @@ as $$
   select count(*) from deleted;
 $$;
 revoke all on function public.vl_prune(int) from public;
+-- Supabase 는 default privilege 로 anon/authenticated 에 execute 를 준다.
+-- `from public` 만으로는 지워지지 않으므로 역할을 명시해 회수한다.
+revoke execute on function public.vl_prune(int) from anon, authenticated;
