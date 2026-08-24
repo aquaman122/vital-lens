@@ -1,0 +1,20 @@
+{
+  "name": "@vital-lens/collector",
+  "version": "0.1.0",
+  "description": "Lightweight RUM collector: Core Web Vitals + JS errors to Supabase",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --minify --outfile=dist/index.js && esbuild src/index.ts --bundle --format=iife --global-name=vitalLens --minify --outfile=dist/vital-lens.min.js && tsc --emitDeclarationOnly",
+    "size": "gzip -c dist/vital-lens.min.js | wc -c"
+  },
+  "dependencies": {
+    "web-vitals": "^4.2.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}
