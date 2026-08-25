@@ -30,7 +30,11 @@
   - **LCP/FCP/CLS는 자동화 브라우저에서 보고되지 않는다 — 버그 아님.** 브라우저 창에서 확인한 결과 `document.visibilityState === 'hidden'` 이었고, `paint` 엔트리(FCP 5624ms)는 존재했다. web-vitals는 페인트 전에 숨겨진 페이지의 LCP/FCP/CLS를 의도적으로 보고하지 않는다. 실브라우저에서 재확인 필요.
 - **대시보드 동작 확인 완료**: `pnpm install` 후 http://localhost:3100 에서 사이트 목록·kt-market 상세 모두 200. release 표에 `dev` 3샘플 표시.
   - 이 과정에서 v0.1 버그 하나를 고쳤다: `page.tsx`가 `format` **함수**를 클라이언트 컴포넌트 `MetricTrend`로 넘기고 있었다. 서버→클라이언트 props는 직렬화돼야 해서 함수는 못 넘어간다. 타입체크·빌드는 통과하고 렌더에서만 500이 나던 것. `decimals: number`를 넘기고 포맷은 클라이언트에서 한다. **서버 컴포넌트에서 클라이언트 컴포넌트로 함수를 넘기지 말 것.**
-- 아직 안 된 것: LCP/FCP/CLS/INP 실수집 확인(사람이 브라우저 탭을 앞으로 두고 열어야 한다), 대시보드 배포.
+- **LCP/FCP 실수집 확인 완료 — 3단계 종료.** 사람이 탭을 앞으로 둔 채 kt-market을 열자 LCP 692ms(1건), FCP 460·984ms(2건)가 들어왔고, 대시보드가 LCP 카드에 "좋음 692ms · p75", release 표에 `dev / LCP p75 692 / 샘플 14`, 느린 페이지에 `/ 692ms` 를 렌더했다. collector → `vl_ingest` → 집계 뷰 → 대시보드 전 구간 관통.
+  - CLS·INP는 안 왔는데 정상이다. web-vitals는 layout shift가 0건이면 CLS를 보고하지 않고, 상호작용이 0건이면 INP를 보고하지 않는다.
+  - **LCP/CLS/INP는 자동화로 확인할 수 없다.** 인앱 Browser 패널, Chrome 자동화 탭 그룹, CDP 강제 페인트 세 경로 모두 `visibilityState: hidden`이었고 LCP 엔트리가 0개였다. 브라우저는 화면에 실제로 보이는 페이지에만 LCP를 만든다. 앞으로도 이 확인은 사람이 해야 한다 — 합성 모니터링으로 CWV가 안 나오는 것이 이 도구(RUM)의 존재 이유이기도 하다.
+- 대시보드 프로덕션 빌드 통과(`next build`). 두 라우트 모두 동적(`ƒ`)이라 secret key가 정적 산출물로 새지 않는다.
+- 아직 안 된 것: 대시보드 배포(Vercel MCP 미인증), kt-market 실배포 수집.
 
 ### 보안 수정 기록 (2026-08-24)
 `0001_init.sql`의 `revoke all on function ... from public` 만으로는 Supabase가 default privilege로 `anon`/`authenticated`에 준 EXECUTE가 남는다. 그 결과 publishable 키만으로 `vl_prune(0)` 을 호출해 `events` 전체를 지울 수 있었다. `revoke execute ... from anon, authenticated` 를 `0001_init.sql`에 추가하고 원격에는 `0002`로 적용. **함수 권한은 `from public` 이 아니라 역할을 명시해 회수할 것.**
@@ -38,7 +42,7 @@
 ## 다음 작업 순서
 1. ~~**Supabase 연결**~~ 완료(secret key 포함).
 2. ~~**수집 부착**~~ 완료(zini-pinlog `85f195b`).
-3. **검증 마무리**: 대시보드 렌더는 확인됨. 남은 것 — kt-market(`localhost:3001`)을 **앞으로 나온 탭**에서 열고 스크롤·클릭한 뒤 다른 탭으로 이동해, LCP/FCP/CLS/INP가 들어오는지 확인. 자동화 브라우저로는 불가(탭이 hidden).
+3. ~~**검증**~~ 완료(LCP/FCP까지 확인, 위 참조).
 4. **배포**: 대시보드를 Vercel에 올리되 반드시 비공개(Password Protection). secret key는 서버 env로만. kt-market(과 zini-pinlog) Vercel 프로젝트에 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY` 두 개 등록. (Vercel MCP는 미인증 상태 — 인터랙티브 세션에서 `/mcp` 필요.)
 5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `vl_prune` pg_cron 스케줄, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능).
 
