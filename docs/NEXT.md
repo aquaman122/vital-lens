@@ -8,7 +8,12 @@
   - URL `https://xnnpfpwtiacsbdftchzg.supabase.co`, publishable key `sb_publishable_2aK-9WVI8wlmy_sMw3y2rQ_Cx1Ph6pq`.
   - 마이그레이션 `0001_init`, `0002_revoke_vl_prune_from_anon` 적용. `sites`에 `zini-pinlog`(핀로그) 등록.
   - `.mcp.json`으로 Supabase MCP를 이 project_ref에 고정(다음 세션에서 승인·인증 필요). `.agents/skills/`에 supabase agent skills 설치.
-  - `apps/dashboard/.env.local` 생성(gitignore됨). **`SUPABASE_SECRET_KEY`는 비어 있음** — Supabase Dashboard > Project Settings > API Keys 의 service_role 값을 직접 채워야 대시보드가 뜬다(MCP로는 조회 불가).
+  - `apps/dashboard/.env.local` 채움(gitignore됨). service_role 키는 MCP로 조회할 수 없어 사람이 직접 넣어야 한다. 넣은 뒤 확인하는 법(키 값은 안 보고 claim만):
+    ```
+    awk -F= '/^SUPABASE_SECRET_KEY=/{print $2}' apps/dashboard/.env.local \
+      | python3 -c "import sys,json,base64;t=sys.stdin.read().strip();p=t.split('.')[1];p+='='*(-len(p)%4);print(json.loads(base64.urlsafe_b64decode(p)))"
+    ```
+    `ref`가 `xnnpfpwtiacsbdftchzg`이고 `role`이 `service_role`이어야 한다. anon 키나 다른 프로젝트 키를 넣기 쉽다.
 - **2단계 수집 부착 완료**: zini-pinlog `dev` 브랜치 커밋 `85f195b`.
   - `public/vital-lens.min.js`(빌드 산출물 사본) + `src/app/Rum.tsx`(`next/script`, data-* 자동 초기화) + `layout.tsx` 마운트 + `env.ts`에 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY`.
   - **npm 패키지가 아니라 정적 파일로 붙였다.** `@vital-lens/collector`는 레지스트리에 없고 `file:` 의존성은 리포 밖 경로라 Vercel에서 안 풀린다. README "방법 B"(모듈 import)는 패키지를 publish하기 전까지 불가 — 지금은 "방법 A"에 해당. 갱신은 `pnpm --filter @vital-lens/collector build` 후 `cp packages/collector/dist/vital-lens.min.js ../zini-pinlog/public/`.
@@ -23,15 +28,17 @@
   - 로컬 dev 서버 실전 확인: 페이지 로드 2회 → `pageview`+`TTFB` 4행 적재(path·device·conn 정상). 검증용 더미 행은 삭제 완료.
   - kt-market도 동일하게 확인: 페이지 로드 2회 → `pageview`+`TTFB` 적재(path·device·conn 정상).
   - **LCP/FCP/CLS는 자동화 브라우저에서 보고되지 않는다 — 버그 아님.** 브라우저 창에서 확인한 결과 `document.visibilityState === 'hidden'` 이었고, `paint` 엔트리(FCP 5624ms)는 존재했다. web-vitals는 페인트 전에 숨겨진 페이지의 LCP/FCP/CLS를 의도적으로 보고하지 않는다. 실브라우저에서 재확인 필요.
-- 아직 안 된 것: 대시보드 secret key 입력 후 실행 확인, 대시보드 배포, zini-pinlog 실배포에서 LCP/CLS/INP 수집 확인.
+- **대시보드 동작 확인 완료**: `pnpm install` 후 http://localhost:3100 에서 사이트 목록·kt-market 상세 모두 200. release 표에 `dev` 3샘플 표시.
+  - 이 과정에서 v0.1 버그 하나를 고쳤다: `page.tsx`가 `format` **함수**를 클라이언트 컴포넌트 `MetricTrend`로 넘기고 있었다. 서버→클라이언트 props는 직렬화돼야 해서 함수는 못 넘어간다. 타입체크·빌드는 통과하고 렌더에서만 500이 나던 것. `decimals: number`를 넘기고 포맷은 클라이언트에서 한다. **서버 컴포넌트에서 클라이언트 컴포넌트로 함수를 넘기지 말 것.**
+- 아직 안 된 것: LCP/FCP/CLS/INP 실수집 확인(사람이 브라우저 탭을 앞으로 두고 열어야 한다), 대시보드 배포.
 
 ### 보안 수정 기록 (2026-08-24)
 `0001_init.sql`의 `revoke all on function ... from public` 만으로는 Supabase가 default privilege로 `anon`/`authenticated`에 준 EXECUTE가 남는다. 그 결과 publishable 키만으로 `vl_prune(0)` 을 호출해 `events` 전체를 지울 수 있었다. `revoke execute ... from anon, authenticated` 를 `0001_init.sql`에 추가하고 원격에는 `0002`로 적용. **함수 권한은 `from public` 이 아니라 역할을 명시해 회수할 것.**
 
 ## 다음 작업 순서
-1. ~~**Supabase 연결**~~ 완료. 남은 것: `apps/dashboard/.env.local`의 `SUPABASE_SECRET_KEY` 채우기.
+1. ~~**Supabase 연결**~~ 완료(secret key 포함).
 2. ~~**수집 부착**~~ 완료(zini-pinlog `85f195b`).
-3. **검증 마무리**: secret key 채운 뒤 대시보드(`pnpm --filter dashboard dev`, http://localhost:3100)에서 `release=dev` 행이 렌더되는지 확인. kt-market을 실브라우저(localhost:3001)로 열어 LCP/FCP/CLS/INP까지 들어오는지 확인.
+3. **검증 마무리**: 대시보드 렌더는 확인됨. 남은 것 — kt-market(`localhost:3001`)을 **앞으로 나온 탭**에서 열고 스크롤·클릭한 뒤 다른 탭으로 이동해, LCP/FCP/CLS/INP가 들어오는지 확인. 자동화 브라우저로는 불가(탭이 hidden).
 4. **배포**: 대시보드를 Vercel에 올리되 반드시 비공개(Password Protection). secret key는 서버 env로만. kt-market(과 zini-pinlog) Vercel 프로젝트에 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY` 두 개 등록. (Vercel MCP는 미인증 상태 — 인터랙티브 세션에서 `/mcp` 필요.)
 5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `vl_prune` pg_cron 스케줄, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능).
 

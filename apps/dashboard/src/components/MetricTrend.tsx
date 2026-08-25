@@ -15,16 +15,19 @@ export default function MetricTrend({
   points,
   goodMax,
   poorMin,
-  format,
+  decimals,
 }: {
   title: string;
   unit: string;
   points: Point[];
   goodMax: number;
   poorMin: number;
-  format: (v: number) => string;
+  /** 소수 자릿수. 0이면 정수 + 천단위 구분. CLS처럼 1 미만 값은 3.
+   *  포맷 함수를 props로 받으면 서버 컴포넌트에서 넘길 수 없다(직렬화 불가). */
+  decimals: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const format = (v: number) => (decimals > 0 ? v.toFixed(decimals) : Math.round(v).toLocaleString());
 
   if (!points.length) {
     return (

@@ -5,9 +5,9 @@ import { fetchDaily, fetchErrors, fetchPages, fetchReleases } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 const METRICS = [
-  { name: 'LCP', unit: 'ms', goodMax: 2500, poorMin: 4000, format: (v: number) => Math.round(v).toLocaleString() },
-  { name: 'INP', unit: 'ms', goodMax: 200, poorMin: 500, format: (v: number) => Math.round(v).toLocaleString() },
-  { name: 'CLS', unit: '', goodMax: 0.1, poorMin: 0.25, format: (v: number) => v.toFixed(3) },
+  { name: 'LCP', unit: 'ms', goodMax: 2500, poorMin: 4000, decimals: 0 },
+  { name: 'INP', unit: 'ms', goodMax: 200, poorMin: 500, decimals: 0 },
+  { name: 'CLS', unit: '', goodMax: 0.1, poorMin: 0.25, decimals: 3 },
 ] as const;
 
 function fmtMetric(name: string, v: number | null): string {
@@ -59,7 +59,7 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
             points={byMetric(m.name)}
             goodMax={m.goodMax}
             poorMin={m.poorMin}
-            format={m.format}
+            decimals={m.decimals}
           />
         ))}
       </div>
