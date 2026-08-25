@@ -34,7 +34,9 @@
   - CLS·INP는 안 왔는데 정상이다. web-vitals는 layout shift가 0건이면 CLS를 보고하지 않고, 상호작용이 0건이면 INP를 보고하지 않는다.
   - **LCP/CLS/INP는 자동화로 확인할 수 없다.** 인앱 Browser 패널, Chrome 자동화 탭 그룹, CDP 강제 페인트 세 경로 모두 `visibilityState: hidden`이었고 LCP 엔트리가 0개였다. 브라우저는 화면에 실제로 보이는 페이지에만 LCP를 만든다. 앞으로도 이 확인은 사람이 해야 한다 — 합성 모니터링으로 CWV가 안 나오는 것이 이 도구(RUM)의 존재 이유이기도 하다.
 - 대시보드 프로덕션 빌드 통과(`next build`). 두 라우트 모두 동적(`ƒ`)이라 secret key가 정적 산출물로 새지 않는다.
-- 아직 안 된 것: 대시보드 배포(Vercel MCP 미인증), kt-market 실배포 수집.
+- **대시보드 Basic 인증 추가**: Vercel 플랜이 Hobby라 Password Protection을 못 쓴다. `apps/dashboard/src/middleware.ts`에 HTTP Basic 인증을 넣고 `DASHBOARD_USER`/`DASHBOARD_PASSWORD`로 제어한다. 비밀번호가 없으면 프로덕션은 503(fail closed), 개발 서버는 통과.
+  - `next start`로 6개 경우 확인: 미설정 503 / 헤더없음 401 / 틀린 비번 401 / 틀린 유저 401 / 정답 200 / 상세 페이지 200.
+- 아직 안 된 것: GitHub 푸시, 대시보드 배포, kt-market 실배포 수집.
 
 ### 보안 수정 기록 (2026-08-24)
 `0001_init.sql`의 `revoke all on function ... from public` 만으로는 Supabase가 default privilege로 `anon`/`authenticated`에 준 EXECUTE가 남는다. 그 결과 publishable 키만으로 `vl_prune(0)` 을 호출해 `events` 전체를 지울 수 있었다. `revoke execute ... from anon, authenticated` 를 `0001_init.sql`에 추가하고 원격에는 `0002`로 적용. **함수 권한은 `from public` 이 아니라 역할을 명시해 회수할 것.**
@@ -43,7 +45,11 @@
 1. ~~**Supabase 연결**~~ 완료(secret key 포함).
 2. ~~**수집 부착**~~ 완료(zini-pinlog `85f195b`).
 3. ~~**검증**~~ 완료(LCP/FCP까지 확인, 위 참조).
-4. **배포**: 대시보드를 Vercel에 올리되 반드시 비공개(Password Protection). secret key는 서버 env로만. kt-market(과 zini-pinlog) Vercel 프로젝트에 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY` 두 개 등록. (Vercel MCP는 미인증 상태 — 인터랙티브 세션에서 `/mcp` 필요.)
+4. **배포**: Vercel MCP는 인증됐지만 **세션 시작 후에 붙어서 이 세션에는 도구가 안 실렸다 — 새 세션에서 진행할 것.**
+   - 대시보드 Vercel 프로젝트: Root Directory `apps/dashboard`, env 4개(`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DASHBOARD_USER`, `DASHBOARD_PASSWORD`). 어느 것에도 `NEXT_PUBLIC_`을 붙이지 않는다.
+   - `DASHBOARD_PASSWORD`는 충분히 긴 임의 문자열로. 비워두면 503이라 데이터가 새지는 않지만 대시보드도 안 열린다.
+   - kt-market Vercel 프로젝트에 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY` 두 개 등록(이건 공개돼도 되는 값).
+   - 배포 후 kt-market 실트래픽에서 LCP/CLS/INP가 쌓이는지 확인.
 5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `vl_prune` pg_cron 스케줄, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능).
 
 ## 지켜야 할 원칙

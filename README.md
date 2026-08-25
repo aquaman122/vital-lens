@@ -76,7 +76,20 @@ pnpm install
 pnpm dev                     # http://localhost:3100
 ```
 
-Vercel에 배포한다면 env 두 개를 넣되, 대시보드가 공개되지 않게 Vercel의 Password Protection이나 사설 도메인 뒤에 둘 것 (v0.1은 자체 로그인이 없다).
+### 대시보드 보호
+
+대시보드에는 자체 로그인이 없고 수집 데이터를 그대로 보여준다. 그래서 HTTP Basic 인증 미들웨어가 앞에 있다:
+
+```bash
+DASHBOARD_USER=vital-lens
+DASHBOARD_PASSWORD=충분히-긴-임의-문자열
+```
+
+`DASHBOARD_PASSWORD`가 비어 있으면 **프로덕션에서는 503으로 아예 열리지 않는다**(개발 서버는 통과 — 로컬에서 매번 입력할 이유가 없다). 비밀번호 없이 배포해도 데이터가 새지 않는다는 뜻이다.
+
+Vercel의 Password Protection은 유료 플랜 기능이라 Hobby에서는 쓸 수 없다. 이 미들웨어는 플랜과 무관하게 동작한다. Pro라면 둘 다 켜도 된다.
+
+Vercel에 배포한다면 env는 넷: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DASHBOARD_USER`, `DASHBOARD_PASSWORD`. **어느 것에도 `NEXT_PUBLIC_`을 붙이지 않는다.** 모노레포이므로 프로젝트 Root Directory를 `apps/dashboard`로 지정한다.
 
 ## 수집 항목과 개인정보
 
