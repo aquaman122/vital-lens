@@ -2,7 +2,7 @@
 
 > 새 Claude Code 세션(휴대폰 클라우드 세션 포함)은 이 파일과 README.md, docs/PRD.md를 먼저 읽고 작업한다.
 
-## 현재 상태 (2026-08-24)
+## 현재 상태 (2026-08-25)
 - v0.1 코드 완성, 빌드 통과. 구조: `packages/collector`(gzip 3.3KB, web-vitals+에러 → Supabase RPC) / `apps/dashboard`(Next.js 15 서버 컴포넌트, p75 추이·release 비교·느린 페이지·에러 목록) / `supabase/migrations/0001_init.sql`(RLS 전면 + security definer RPC `vl_ingest`, 집계 뷰 4개).
 - **1단계 Supabase 연결 완료**: 프로젝트 `vital-lens` (ref `xnnpfpwtiacsbdftchzg`, org `aquaman122's Org`, region ap-northeast-2, Free).
   - URL `https://xnnpfpwtiacsbdftchzg.supabase.co`, publishable key `sb_publishable_2aK-9WVI8wlmy_sMw3y2rQ_Cx1Ph6pq`.
@@ -14,9 +14,15 @@
   - **npm 패키지가 아니라 정적 파일로 붙였다.** `@vital-lens/collector`는 레지스트리에 없고 `file:` 의존성은 리포 밖 경로라 Vercel에서 안 풀린다. README "방법 B"(모듈 import)는 패키지를 publish하기 전까지 불가 — 지금은 "방법 A"에 해당. 갱신은 `pnpm --filter @vital-lens/collector build` 후 `cp packages/collector/dist/vital-lens.min.js ../zini-pinlog/public/`.
   - env 이름을 `NEXT_PUBLIC_VITAL_LENS_*`로 분리한 이유: zini-pinlog가 이미 자기 Supabase를 `NEXT_PUBLIC_SUPABASE_*`로 쓰고 있다.
   - `release`는 `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0,7)`, 로컬은 `"dev"`로 폴백해 실배포 데이터와 섞이지 않게 했다.
+- **첫 대상은 kt-market**: zini-pinlog의 Supabase 프로젝트가 없어져서 첫 관측 대상을 `juntelecom/apps/kt-market`으로 잡았다. zini-pinlog 부착도 되돌리지 않고 그대로 둬서 두 사이트를 함께 수집한다. `sites`에 `zini-pinlog`, `kt-market` 두 개.
+- **kt-market 부착 완료**: juntelecom `feat/phone-detail-page` 커밋 `c0597f8`.
+  - `apps/kt-market/public/vital-lens.min.js` + `src/features/analytics/components/Rum.tsx` + `layout.tsx`에서 `<Analytics />` 옆에 마운트 + `src/shared/lib/analytics.ts`에 `VITAL_LENS_URL/KEY`.
+  - kt-market에는 zini-pinlog 같은 `env.ts`(zod) 모듈이 없어서, 기존 트래커 상수들이 모여 있는 `shared/lib/analytics.ts` 패턴을 따랐다.
+  - 여기도 env 이름은 `NEXT_PUBLIC_VITAL_LENS_*` — `NEXT_PUBLIC_SUPABASE_*`는 이미 kt-market 자체 프로젝트가 쓴다.
 - **3단계 검증**: ingest RPC 전항목 통과 — 쿼리스트링 제거, message 500자·stack 2000자 절단, value 600000 클램프, 미지 device→`unknown`, 미지 type 스킵, 배치 0/51·비배열·없는 사이트 거부, anon의 테이블 직접 읽기 및 `vl_prune` 실행 차단.
   - 로컬 dev 서버 실전 확인: 페이지 로드 2회 → `pageview`+`TTFB` 4행 적재(path·device·conn 정상). 검증용 더미 행은 삭제 완료.
-  - 단, 자동화 브라우저에서는 LCP/FCP/CLS가 보고되지 않았다(가시성 조건). 실브라우저에서 재확인 필요.
+  - kt-market도 동일하게 확인: 페이지 로드 2회 → `pageview`+`TTFB` 적재(path·device·conn 정상).
+  - **LCP/FCP/CLS는 자동화 브라우저에서 보고되지 않는다 — 버그 아님.** 브라우저 창에서 확인한 결과 `document.visibilityState === 'hidden'` 이었고, `paint` 엔트리(FCP 5624ms)는 존재했다. web-vitals는 페인트 전에 숨겨진 페이지의 LCP/FCP/CLS를 의도적으로 보고하지 않는다. 실브라우저에서 재확인 필요.
 - 아직 안 된 것: 대시보드 secret key 입력 후 실행 확인, 대시보드 배포, zini-pinlog 실배포에서 LCP/CLS/INP 수집 확인.
 
 ### 보안 수정 기록 (2026-08-24)
@@ -25,8 +31,8 @@
 ## 다음 작업 순서
 1. ~~**Supabase 연결**~~ 완료. 남은 것: `apps/dashboard/.env.local`의 `SUPABASE_SECRET_KEY` 채우기.
 2. ~~**수집 부착**~~ 완료(zini-pinlog `85f195b`).
-3. **검증 마무리**: secret key 채운 뒤 대시보드(`pnpm --filter dashboard dev`, http://localhost:3100)에서 `release=dev` 행이 렌더되는지 확인. zini-pinlog를 실브라우저로 열어 LCP/FCP/CLS/INP까지 들어오는지 확인.
-4. **배포**: 대시보드를 Vercel에 올리되 반드시 비공개(Password Protection). secret key는 서버 env로만. zini-pinlog Vercel 프로젝트에도 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY` 두 개 등록. (Vercel MCP는 미인증 상태 — 인터랙티브 세션에서 `/mcp` 필요.)
+3. **검증 마무리**: secret key 채운 뒤 대시보드(`pnpm --filter dashboard dev`, http://localhost:3100)에서 `release=dev` 행이 렌더되는지 확인. kt-market을 실브라우저(localhost:3001)로 열어 LCP/FCP/CLS/INP까지 들어오는지 확인.
+4. **배포**: 대시보드를 Vercel에 올리되 반드시 비공개(Password Protection). secret key는 서버 env로만. kt-market(과 zini-pinlog) Vercel 프로젝트에 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY` 두 개 등록. (Vercel MCP는 미인증 상태 — 인터랙티브 세션에서 `/mcp` 필요.)
 5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `vl_prune` pg_cron 스케줄, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능).
 
 ## 지켜야 할 원칙
