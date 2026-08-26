@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import MetricTrend, { type Point } from '@/components/MetricTrend';
-import { fetchDaily, fetchErrors, fetchPages, fetchReleases } from '@/lib/db';
+import { fetchDaily, fetchErrors, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,11 +17,12 @@ function fmtMetric(name: string, v: number | null): string {
 
 export default async function SitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const [daily, releases, pages, errors] = await Promise.all([
+  const [daily, releases, pages, errors, interactions] = await Promise.all([
     fetchDaily(siteId),
     fetchReleases(siteId),
     fetchPages(siteId),
     fetchErrors(siteId),
+    fetchSlowInteractions(siteId),
   ]);
 
   // 디바이스 합산: 일별로 samples 가중 없이 단순 p75 재계산은 불가하므로 device='mobile' 우선, 없으면 전체 중 최대 샘플 device
@@ -130,6 +131,45 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
                 <td className="mono">{p.path}</td>
                 <td className="num">{fmtMetric('LCP', p.p75)}</td>
                 <td className="num">{p.samples.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2>느린 인터랙션 (INP p75)</h2>
+      <div className="card tablewrap" style={{ padding: 0 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>대상 요소</th>
+              <th>동작</th>
+              <th className="num">INP p75 (ms)</th>
+              <th className="num">입력 지연</th>
+              <th className="num">처리</th>
+              <th className="num">표시</th>
+              <th className="num">샘플</th>
+            </tr>
+          </thead>
+          <tbody>
+            {interactions.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ color: 'var(--text-muted)' }}>
+                  데이터 없음 — attribution은 collector 갱신 이후 수집분부터 쌓인다
+                </td>
+              </tr>
+            )}
+            {interactions.map((it) => (
+              <tr key={`${it.target}|${it.interaction}`}>
+                <td className="mono" style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {it.target}
+                </td>
+                <td>{it.interaction}</td>
+                <td className="num">{fmtMetric('INP', it.p75)}</td>
+                <td className="num">{fmtMetric('INP', it.input_delay_p75)}</td>
+                <td className="num">{fmtMetric('INP', it.processing_p75)}</td>
+                <td className="num">{fmtMetric('INP', it.presentation_p75)}</td>
+                <td className="num">{it.samples.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>

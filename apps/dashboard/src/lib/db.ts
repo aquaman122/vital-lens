@@ -37,6 +37,17 @@ export type PageMetric = {
   p75: number | null;
 };
 
+export type SlowInteraction = {
+  site_id: string;
+  target: string;
+  interaction: string;
+  samples: number;
+  p75: number | null;
+  input_delay_p75: number | null;
+  processing_p75: number | null;
+  presentation_p75: number | null;
+};
+
 export type RecentError = {
   site_id: string;
   ts: string;
@@ -89,6 +100,17 @@ export async function fetchPages(siteId: string): Promise<PageMetric[]> {
     .limit(15);
   if (error) throw error;
   return data as PageMetric[];
+}
+
+export async function fetchSlowInteractions(siteId: string): Promise<SlowInteraction[]> {
+  const { data, error } = await db()
+    .from('vl_slow_interactions')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('p75', { ascending: false })
+    .limit(15);
+  if (error) throw error;
+  return data as SlowInteraction[];
 }
 
 export async function fetchErrors(siteId: string): Promise<RecentError[]> {

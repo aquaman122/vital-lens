@@ -25,7 +25,18 @@ type Ev = {
   device: string;
   conn?: string;
   sid: string;
-  detail?: { message?: string; stack?: string; source?: string };
+  detail?: {
+    // error
+    message?: string;
+    stack?: string;
+    source?: string;
+    // INP attribution
+    target?: string;
+    interaction?: string;
+    input_delay?: number;
+    processing?: number;
+    presentation?: number;
+  };
 };
 
 const MAX_BATCH = 50;
@@ -35,6 +46,24 @@ function deviceType(): string {
   const w = window.innerWidth;
   if (/Mobi|Android/i.test(navigator.userAgent)) return w >= 768 ? 'tablet' : 'mobile';
   return 'desktop';
+}
+
+/** INP attribution용 CSS 셀렉터 — id에서 끊고, 최대 4단계. */
+function selector(el: unknown): string | undefined {
+  const parts: string[] = [];
+  let n = el as Element | null;
+  while (n && n.nodeType === 1 && parts.length < 4) {
+    let s = n.nodeName.toLowerCase();
+    if (n.id) {
+      parts.unshift(`${s}#${n.id}`);
+      break;
+    }
+    const c = typeof n.className === 'string' && n.className.trim().split(/\s+/)[0];
+    if (c) s += `.${c}`;
+    parts.unshift(s);
+    n = n.parentElement;
+  }
+  return parts.length ? parts.join('>') : undefined;
 }
 
 function connType(): string | undefined {
@@ -110,8 +139,23 @@ export function init(cfg: VitalLensConfig): void {
   }
 
   // Core Web Vitals — 각 메트릭은 페이지 수명 중 확정될 때 보고됨
-  const onMetric = (m: Metric) =>
-    push({ type: 'metric', name: m.name, value: m.value, rating: m.rating, ...base() });
+  const onMetric = (m: Metric) => {
+    const ev: Ev = { type: 'metric', name: m.name, value: m.value, rating: m.rating, ...base() };
+    // INP attribution: web-vitals/attribution 빌드는 gzip 예산(4KB)을 넘겨서 못 쓴다.
+    // 같은 정보가 metric.entries(PerformanceEventTiming)에 있으므로 직접 계산한다.
+    const e = m.name === 'INP' ? (m.entries?.[0] as PerformanceEventTiming | undefined) : undefined;
+    if (e) {
+      ev.detail = {
+        target: selector((e as PerformanceEventTiming & { target?: unknown }).target),
+        interaction: e.name,
+        input_delay: Math.round(e.processingStart - e.startTime),
+        processing: Math.round(e.processingEnd - e.processingStart),
+        // duration은 startTime 기준 전체 폭 — 남는 구간이 렌더/페인트 지연
+        presentation: Math.round(Math.max(0, e.startTime + e.duration - e.processingEnd)),
+      };
+    }
+    push(ev);
+  };
   onLCP(onMetric);
   onINP(onMetric);
   onCLS(onMetric);
