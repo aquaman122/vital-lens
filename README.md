@@ -102,4 +102,4 @@ Vercel에 배포한다면 env는 넷: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DA
 
 ## 로드맵 (v0.2 후보)
 
-INP attribution(느린 인터랙션의 대상 요소), 웹훅 알림(배포 후 p75가 임계 초과 시), 일별 롤업 테이블로 집계 이전, 소스맵 심볼리케이션.
+~~INP attribution~~, ~~웹훅 알림~~, ~~일별 롤업~~ 완료(마이그레이션 `0004`~`0006`). 남은 후보: `@vital-lens/collector` npm publish, 소스맵 심볼리케이션.

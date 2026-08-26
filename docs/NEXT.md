@@ -48,6 +48,13 @@
   - 프로덕션 대시보드가 kt-market 데이터를 렌더한다: LCP 카드 "좋음 692ms · p75", release 표 `dev / LCP p75 692 / 샘플 16`, 느린 페이지 `/ 692ms`, 에러 0건. Vercel 서버에서 secret key로 Supabase를 읽는 경로까지 관통 확인.
 - **`vl_prune` pg_cron 스케줄 적용 (2026-08-26)**: 마이그레이션 `0003_schedule_vl_prune` — pg_cron 확장 + `cron.schedule('vl-prune', '0 18 * * *', ...)`. **pg_cron은 UTC 기준**이라 KST 03:00 = `0 18 * * *`. 같은 jobname은 덮어쓰므로 재적용 안전. `cron.job`에 jobid 1 active 확인, `vl_prune(90)` 수동 실행 0건 삭제/32행 유지 정상. 어드바이저 신규 이슈 없음(기존 3건은 설계 의도).
 - **kt-market Vercel env 2개 등록 완료 (2026-08-26)**: `NEXT_PUBLIC_VITAL_LENS_URL`, `NEXT_PUBLIC_VITAL_LENS_KEY` — Production·Preview·Development. `juntell` 계정의 `kt-market` 프로젝트. 공개돼도 되는 값이라 non-sensitive.
+- **v0.2 세 개 완료 (2026-08-26)**: INP attribution(`0004`), 일별 롤업(`0005`), Discord 웹훅 알림(`0006`). 전부 원격 적용·검증 완료.
+  - **INP attribution**: `web-vitals/attribution` 빌드는 gzip 5032B(전체)·4558B(INP만 혼합)로 4KB 예산 위반이라 **안 쓴다**. 기본 `onINP`의 `metric.entries[0]`(PerformanceEventTiming)에서 target 셀렉터·interaction·input_delay/processing/presentation을 직접 계산 — +264B로 3647/4096. `vl_ingest` detail 화이트리스트에 5키 추가(`jsonb_strip_nulls`, 미지 키 폐기 유지), `vl_slow_interactions` 뷰 + 대시보드 "느린 인터랙션" 표. RPC로 악성 키 폐기·절단·집계까지 검증.
+  - **일별 롤업**: `vl_daily_rollup` 테이블(RLS on·무정책) + `vl_rollup()`(멱등 upsert, `current_date-89` 하한으로 prune에 일부 잘린 날은 안 덮음) + cron `vl-rollup` 17:50 UTC(prune 10분 전). 대시보드는 `vl_daily_combined`(지난 날=롤업, 오늘=라이브)를 읽는다. 원시 90일, 집계 영구.
+  - **웹훅 알림**: `vl_alert_check()` 매시 5분 — 최근 2일 release의 p75가 good 경계(LCP 2500/INP 200/CLS 0.1) 초과·샘플≥8이면 Discord POST(pg_net 비동기). `vl_alerts` (site,release,name) 유니크로 평생 1회. `dev`/`unknown` release 제외. **URL은 Vault `vl_discord_webhook` — 아직 미설정이라 no-op 상태.** 설정 즉시 다음 실행이 발송한다.
+  - cron 잡 3개: `vl-rollup` 50 17 * * * / `vl-prune` 0 18 * * * / `vl-alerts` 5 * * * *.
+  - **collector 갱신 미전파**: zini-pinlog·kt-market의 `public/vital-lens.min.js`는 아직 attribution 없는 구버전. 갱신법: `pnpm --filter @vital-lens/collector build` 후 각 리포 public/에 복사. detail 없는 INP 행은 새 뷰에서 그냥 빠진다(하위호환).
+- npm publish는 보류(npm 미로그인). 발행 전 패키징(exports·README) 정리 필요.
 - 아직 안 된 것: **kt-market 프로덕션에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
 ### 보안 수정 기록 (2026-08-24)
@@ -59,7 +66,7 @@
 3. ~~**검증**~~ 완료(LCP/FCP까지 확인, 위 참조).
 4. ~~**배포**~~ 완료(대시보드 배포·검증, kt-market env). 남은 것 하나:
    - **kt-market 실트래픽 수집**: juntelecom `dev`가 `main`에 머지돼 프로덕션에 collector가 실려야 시작된다. 실리면 실브라우저 트래픽에서 LCP·CLS·INP가 쌓이는지 확인할 것 — 지금까지 확인한 CLS/INP 부재는 layout shift·상호작용이 0건이라 web-vitals가 보고하지 않은 것이지 버그가 아니다.
-5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능). ~~`vl_prune` pg_cron 스케줄~~은 `0003`으로 완료.
+5. **v0.2**: ~~INP attribution~~(`0004`) · ~~웹훅 알림~~(`0006`, Vault URL 설정만 남음) · ~~일별 롤업~~(`0005`) · ~~`vl_prune` pg_cron~~(`0003`) 완료. 남은 것: `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능), 부착 사이트 collector 파일 갱신.
 
 ## 지켜야 할 원칙
 - 보안: 권한은 키가 아니라 함수에. anon에 테이블 정책을 만들지 않는다. secret key를 `NEXT_PUBLIC_`으로 노출하지 않는다.
