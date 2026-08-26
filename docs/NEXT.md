@@ -54,7 +54,9 @@
   - **웹훅 알림**: `vl_alert_check()` 매시 5분 — 최근 2일 release의 p75가 good 경계(LCP 2500/INP 200/CLS 0.1) 초과·샘플≥8이면 Discord POST(pg_net 비동기). `vl_alerts` (site,release,name) 유니크로 평생 1회. `dev`/`unknown` release 제외. **URL은 Vault `vl_discord_webhook` — 아직 미설정이라 no-op 상태.** 설정 즉시 다음 실행이 발송한다.
   - cron 잡 3개: `vl-rollup` 50 17 * * * / `vl-prune` 0 18 * * * / `vl-alerts` 5 * * * *.
   - **collector 갱신 미전파**: zini-pinlog·kt-market의 `public/vital-lens.min.js`는 아직 attribution 없는 구버전. 갱신법: `pnpm --filter @vital-lens/collector build` 후 각 리포 public/에 복사. detail 없는 INP 행은 새 뷰에서 그냥 빠진다(하위호환).
-- npm publish는 보류(npm 미로그인). 발행 전 패키징(exports·README) 정리 필요.
+- **npm publish 패키징 완료 (2026-08-27)**: `packages/collector`에 exports 맵·repository·keywords·`publishConfig.access=public`·unpkg/jsdelivr 엔트리·LICENSE(루트 MIT 사본)·패키지 README 추가. `prepublishOnly`가 빌드+gzip 4096B 게이트를 강제한다. `npm pack --dry-run` 6파일 7.4KB 확인. 이름 `@vital-lens/collector`는 레지스트리에서 비어 있음(404).
+  - **발행 자체는 사람 몫**: `npm login` 후 `packages/collector`에서 `npm publish`. 스코프 패키지라 npm에 `vital-lens` org를 먼저 만들거나(권장), 스코프를 개인 계정명으로 바꿔야 한다. 발행되면 README 방법 B가 실제로 동작한다.
+- **collector 갱신 전파 (2026-08-27)**: kt-market은 `juntelecom/apps/kt-market/public/vital-lens.min.js`에 INP-attribution 빌드(3647B gzip) 복사 완료 — **커밋은 안 됐다**(권한 분류기가 다른 리포 커밋을 막음). juntelecom 작업 트리에 unstaged로 남아 있으니 사람이 커밋할 것. zini-pinlog는 **로컬 클론이 이 머신에 없어서** 전파 불가 — 클론을 받거나 다른 머신에서 같은 파일을 복사해야 한다.
 - 아직 안 된 것: **kt-market 프로덕션에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
 ### 보안 수정 기록 (2026-08-24)

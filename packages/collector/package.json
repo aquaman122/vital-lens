@@ -1,14 +1,52 @@
 {
   "name": "@vital-lens/collector",
   "version": "0.1.0",
-  "description": "Lightweight RUM collector: Core Web Vitals + JS errors to Supabase",
+  "description": "Lightweight RUM collector (3.7KB gzip): Core Web Vitals + INP attribution + JS errors to your own Supabase",
+  "license": "MIT",
+  "author": "sukwon <swj981128@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aquaman122/vital-lens.git",
+    "directory": "packages/collector"
+  },
+  "homepage": "https://github.com/aquaman122/vital-lens#readme",
+  "bugs": "https://github.com/aquaman122/vital-lens/issues",
+  "keywords": [
+    "rum",
+    "web-vitals",
+    "core-web-vitals",
+    "lcp",
+    "inp",
+    "cls",
+    "supabase",
+    "monitoring",
+    "real-user-monitoring"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "unpkg": "dist/vital-lens.min.js",
+  "jsdelivr": "dist/vital-lens.min.js",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": false
+  },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --format=esm --minify --outfile=dist/index.js && esbuild src/index.ts --bundle --format=iife --global-name=vitalLens --minify --outfile=dist/vital-lens.min.js && tsc --emitDeclarationOnly",
-    "size": "gzip -c dist/vital-lens.min.js | wc -c"
+    "size": "gzip -c dist/vital-lens.min.js | wc -c",
+    "prepublishOnly": "npm run build && node -e \"const z=require('zlib'),f=require('fs');const n=z.gzipSync(f.readFileSync('dist/vital-lens.min.js')).length;if(n>4096){console.error('gzip '+n+'B > 4096B budget');process.exit(1)};console.log('gzip '+n+'B OK')\""
   },
   "dependencies": {
     "web-vitals": "^4.2.4"
