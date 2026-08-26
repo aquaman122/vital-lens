@@ -2,7 +2,7 @@
 
 > 새 Claude Code 세션(휴대폰 클라우드 세션 포함)은 이 파일과 README.md, docs/PRD.md를 먼저 읽고 작업한다.
 
-## 현재 상태 (2026-08-25)
+## 현재 상태 (2026-08-26)
 - v0.1 코드 완성, 빌드 통과. 구조: `packages/collector`(gzip 3.3KB, web-vitals+에러 → Supabase RPC) / `apps/dashboard`(Next.js 15 서버 컴포넌트, p75 추이·release 비교·느린 페이지·에러 목록) / `supabase/migrations/0001_init.sql`(RLS 전면 + security definer RPC `vl_ingest`, 집계 뷰 4개).
 - **1단계 Supabase 연결 완료**: 프로젝트 `vital-lens` (ref `xnnpfpwtiacsbdftchzg`, org `aquaman122's Org`, region ap-northeast-2, Free).
   - URL `https://xnnpfpwtiacsbdftchzg.supabase.co`, publishable key `sb_publishable_2aK-9WVI8wlmy_sMw3y2rQ_Cx1Ph6pq`.
@@ -36,7 +36,18 @@
 - 대시보드 프로덕션 빌드 통과(`next build`). 두 라우트 모두 동적(`ƒ`)이라 secret key가 정적 산출물로 새지 않는다.
 - **대시보드 Basic 인증 추가**: Vercel 플랜이 Hobby라 Password Protection을 못 쓴다. `apps/dashboard/src/middleware.ts`에 HTTP Basic 인증을 넣고 `DASHBOARD_USER`/`DASHBOARD_PASSWORD`로 제어한다. 비밀번호가 없으면 프로덕션은 503(fail closed), 개발 서버는 통과.
   - `next start`로 6개 경우 확인: 미설정 503 / 헤더없음 401 / 틀린 비번 401 / 틀린 유저 401 / 정답 200 / 상세 페이지 200.
-- 아직 안 된 것: GitHub 푸시, 대시보드 배포, kt-market 실배포 수집.
+- **GitHub 푸시 완료 (2026-08-26)**: `3760e11..34649a4`, 미푸시 7개 커밋을 `origin/main`에 올렸다.
+- **4단계 대시보드 배포 완료 (2026-08-26)**: https://vital-lens-dashboard.vercel.app — Vercel 팀 `aquaman122's projects`(Hobby), 프로젝트 `vital-lens-dashboard`, Root Directory `apps/dashboard`, 프로덕션 브랜치 `main`. 푸시하면 자동 배포된다.
+  - env 4개 등록: `SUPABASE_URL`·`DASHBOARD_USER`는 non-sensitive(나중에 값 확인 가능), `SUPABASE_SECRET_KEY`·`DASHBOARD_PASSWORD`는 sensitive(write-only, 다시 못 읽는다). 넷 다 Production·Preview. `NEXT_PUBLIC_` 안 붙였다.
+  - `DASHBOARD_PASSWORD`는 `openssl rand -base64 24`. **sensitive라 Vercel에서 다시 읽을 수 없다 — 비밀번호 관리자에 보관할 것.** 잃어버리면 새로 만들어 `--force`로 덮어쓰고 재배포하면 된다.
+  - **Vercel CLI 계정이 둘로 갈려 있다.** `vital-lens-dashboard`는 `aquaman122` 계정, juntelecom 쪽(kt-market 등)은 `juntell` 계정. CLI는 한 번에 하나만 로그인되므로 작업 전에 `npx vercel whoami`로 확인할 것. Vercel MCP는 `aquaman122`에 붙어 있지만 **env 관리 도구가 없다**(프로젝트 생성·배포·로그·보호설정만) — env는 CLI로 해야 한다.
+  - **Vercel이 이제 신규 env를 기본 secret visibility로 만든다.** `NEXT_PUBLIC_` 접두사가 붙은 변수는 Production/Preview에서 secret일 수 없어 `invalid_visibility`로 거부된다. `--no-sensitive`를 줘야 한다.
+  - 시크릿은 채팅·로그에 찍지 않도록 파일에서 stdin으로 흘려 넣었다: `vercel env add NAME production,preview --sensitive < 파일`.
+- **배포 후 검증 완료 (2026-08-26)**: 인증 없음 401 / 틀린 비번 401 / 틀린 유저 401 / 정답 200 / `/site/kt-market` 200. 401 응답에 `WWW-Authenticate: Basic realm="vital-lens"`, `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`.
+  - **fail closed를 실제 Vercel에서 확인했다.** env를 넣기 전 프로덕션 배포가 `HTTP/2 503` + "DASHBOARD_PASSWORD 미설정 — 대시보드를 열지 않습니다"를 반환했다. Hobby라 Vercel Password Protection을 못 쓰므로 이 미들웨어가 유일한 보호막이고, 그 보호막이 없으면 아예 안 열린다.
+  - 프로덕션 대시보드가 kt-market 데이터를 렌더한다: LCP 카드 "좋음 692ms · p75", release 표 `dev / LCP p75 692 / 샘플 16`, 느린 페이지 `/ 692ms`, 에러 0건. Vercel 서버에서 secret key로 Supabase를 읽는 경로까지 관통 확인.
+- **kt-market Vercel env 2개 등록 완료 (2026-08-26)**: `NEXT_PUBLIC_VITAL_LENS_URL`, `NEXT_PUBLIC_VITAL_LENS_KEY` — Production·Preview·Development. `juntell` 계정의 `kt-market` 프로젝트. 공개돼도 되는 값이라 non-sensitive.
+- 아직 안 된 것: **kt-market 프로덕션에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
 ### 보안 수정 기록 (2026-08-24)
 `0001_init.sql`의 `revoke all on function ... from public` 만으로는 Supabase가 default privilege로 `anon`/`authenticated`에 준 EXECUTE가 남는다. 그 결과 publishable 키만으로 `vl_prune(0)` 을 호출해 `events` 전체를 지울 수 있었다. `revoke execute ... from anon, authenticated` 를 `0001_init.sql`에 추가하고 원격에는 `0002`로 적용. **함수 권한은 `from public` 이 아니라 역할을 명시해 회수할 것.**
@@ -45,11 +56,8 @@
 1. ~~**Supabase 연결**~~ 완료(secret key 포함).
 2. ~~**수집 부착**~~ 완료(zini-pinlog `85f195b`).
 3. ~~**검증**~~ 완료(LCP/FCP까지 확인, 위 참조).
-4. **배포**: Vercel MCP는 인증됐지만 **세션 시작 후에 붙어서 이 세션에는 도구가 안 실렸다 — 새 세션에서 진행할 것.**
-   - 대시보드 Vercel 프로젝트: Root Directory `apps/dashboard`, env 4개(`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DASHBOARD_USER`, `DASHBOARD_PASSWORD`). 어느 것에도 `NEXT_PUBLIC_`을 붙이지 않는다.
-   - `DASHBOARD_PASSWORD`는 충분히 긴 임의 문자열로. 비워두면 503이라 데이터가 새지는 않지만 대시보드도 안 열린다.
-   - kt-market Vercel 프로젝트에 `NEXT_PUBLIC_VITAL_LENS_URL/_KEY` 두 개 등록(이건 공개돼도 되는 값).
-   - 배포 후 kt-market 실트래픽에서 LCP/CLS/INP가 쌓이는지 확인.
+4. ~~**배포**~~ 완료(대시보드 배포·검증, kt-market env). 남은 것 하나:
+   - **kt-market 실트래픽 수집**: juntelecom `dev`가 `main`에 머지돼 프로덕션에 collector가 실려야 시작된다. 실리면 실브라우저 트래픽에서 LCP·CLS·INP가 쌓이는지 확인할 것 — 지금까지 확인한 CLS/INP 부재는 layout shift·상호작용이 0건이라 web-vitals가 보고하지 않은 것이지 버그가 아니다.
 5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `vl_prune` pg_cron 스케줄, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능).
 
 ## 지켜야 할 원칙
