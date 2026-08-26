@@ -97,7 +97,7 @@ Vercel에 배포한다면 env는 넷: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DA
 
 ## 운영 메모
 
-- 원시 이벤트는 90일 보관 권장: SQL Editor에서 `select vl_prune(90);` 를 주기 실행 (pg_cron 확장을 켰다면 `select cron.schedule('vl-prune', '0 3 * * *', $$select vl_prune(90)$$);`)
+- 원시 이벤트는 90일 보관: `0003_schedule_vl_prune.sql`이 pg_cron으로 매일 KST 03:00(UTC 18:00)에 `vl_prune(90)`을 실행한다. pg_cron 없는 환경이면 SQL Editor에서 `select vl_prune(90);` 를 주기 실행.
 - 무료 티어 기준 하루 수만 이벤트까지는 무리 없음. 트래픽이 크면 `sampleRate: 0.1` 로.
 
 ## 로드맵 (v0.2 후보)

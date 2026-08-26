@@ -46,6 +46,7 @@
 - **배포 후 검증 완료 (2026-08-26)**: 인증 없음 401 / 틀린 비번 401 / 틀린 유저 401 / 정답 200 / `/site/kt-market` 200. 401 응답에 `WWW-Authenticate: Basic realm="vital-lens"`, `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`.
   - **fail closed를 실제 Vercel에서 확인했다.** env를 넣기 전 프로덕션 배포가 `HTTP/2 503` + "DASHBOARD_PASSWORD 미설정 — 대시보드를 열지 않습니다"를 반환했다. Hobby라 Vercel Password Protection을 못 쓰므로 이 미들웨어가 유일한 보호막이고, 그 보호막이 없으면 아예 안 열린다.
   - 프로덕션 대시보드가 kt-market 데이터를 렌더한다: LCP 카드 "좋음 692ms · p75", release 표 `dev / LCP p75 692 / 샘플 16`, 느린 페이지 `/ 692ms`, 에러 0건. Vercel 서버에서 secret key로 Supabase를 읽는 경로까지 관통 확인.
+- **`vl_prune` pg_cron 스케줄 적용 (2026-08-26)**: 마이그레이션 `0003_schedule_vl_prune` — pg_cron 확장 + `cron.schedule('vl-prune', '0 18 * * *', ...)`. **pg_cron은 UTC 기준**이라 KST 03:00 = `0 18 * * *`. 같은 jobname은 덮어쓰므로 재적용 안전. `cron.job`에 jobid 1 active 확인, `vl_prune(90)` 수동 실행 0건 삭제/32행 유지 정상. 어드바이저 신규 이슈 없음(기존 3건은 설계 의도).
 - **kt-market Vercel env 2개 등록 완료 (2026-08-26)**: `NEXT_PUBLIC_VITAL_LENS_URL`, `NEXT_PUBLIC_VITAL_LENS_KEY` — Production·Preview·Development. `juntell` 계정의 `kt-market` 프로젝트. 공개돼도 되는 값이라 non-sensitive.
 - 아직 안 된 것: **kt-market 프로덕션에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
@@ -58,7 +59,7 @@
 3. ~~**검증**~~ 완료(LCP/FCP까지 확인, 위 참조).
 4. ~~**배포**~~ 완료(대시보드 배포·검증, kt-market env). 남은 것 하나:
    - **kt-market 실트래픽 수집**: juntelecom `dev`가 `main`에 머지돼 프로덕션에 collector가 실려야 시작된다. 실리면 실브라우저 트래픽에서 LCP·CLS·INP가 쌓이는지 확인할 것 — 지금까지 확인한 CLS/INP 부재는 layout shift·상호작용이 0건이라 web-vitals가 보고하지 않은 것이지 버그가 아니다.
-5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `vl_prune` pg_cron 스케줄, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능).
+5. **v0.2 후보** (PRD 로드맵): INP attribution, 배포 후 p75 임계 초과 웹훅 알림, 일별 롤업 테이블, `@vital-lens/collector` npm publish(그러면 README 방법 B가 실제로 가능). ~~`vl_prune` pg_cron 스케줄~~은 `0003`으로 완료.
 
 ## 지켜야 할 원칙
 - 보안: 권한은 키가 아니라 함수에. anon에 테이블 정책을 만들지 않는다. secret key를 `NEXT_PUBLIC_`으로 노출하지 않는다.
