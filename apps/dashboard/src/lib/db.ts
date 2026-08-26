@@ -69,8 +69,9 @@ export async function fetchSites() {
 
 export async function fetchDaily(siteId: string): Promise<DailyMetric[]> {
   const since = new Date(Date.now() - DAYS * 864e5).toISOString().slice(0, 10);
+  // 지난 날은 vl_daily_rollup(집계 확정), 오늘은 라이브 뷰 — 0005 결합 뷰
   const { data, error } = await db()
-    .from('vl_daily_metrics')
+    .from('vl_daily_combined')
     .select('*')
     .eq('site_id', siteId)
     .gte('day', since)
