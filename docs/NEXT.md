@@ -66,7 +66,11 @@
   - **SPA soft-nav**: Framer 내부 이동은 클라이언트 라우팅이라 path별 트래픽이 랜딩에 뭉치던 것 수정 — `pushState`/`popstate` 훅으로 path 변경 시 pageview 추가 기록. **LCP/FCP/TTFB/CLS는 랜딩 path에 고정 귀속**(스펙상 최초 로드에만 확정 — hide 시점 보고라 soft-nav 후 현재 path로 오귀속되던 기존 버그도 함께 수정), INP·에러·pageview는 현재 path.
   - **에러 dedup**: 세션 내 동일 message 1회만 전송(상한 100종) — 에러 루프가 행을 쏟는 것 차단.
   - vm 셔임 스모크 테스트로 soft-nav 중복 방지·dedup 확인. 새 빌드는 dashboard `public/`(Framer CDN)과 juntelecom kt-market `public/`에 복사됨(후자 커밋은 사람 몫).
-- 아직 안 된 것: **kt-market 프로덕션에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
+- **Framer 부착 완료 — 실사용자 수집 시작 (2026-08-27)**: ktmarket.co.kr Custom Code(End of body, Run: Once)에 script 태그 부착·Publish. 몇 시간 만에 release `framer-0827`로 LCP 95샘플 등 실트래픽 적재. soft-nav pageview가 path별로 정확히 분리됨(`/event/foldable8`, `/phone/*` 등).
+  - **LCP attribution 첫 발견**: `/event/foldable8` 히어로 webp p75 3402ms(load_time 2126ms — 이미지 무거움), `/phone/aip17p-256` S3 이미지 load_delay 1755ms(발견 지연 — preload 없음). 개선 대상이 요소 단위로 특정된다.
+  - PRD 성공 기준 1("내 프로젝트에 붙여 14일 데이터가 쌓인다") 카운트다운 시작.
+- **Discord 웹훅 활성화·검증 (2026-08-27)**: Vault `vl_discord_webhook` 등록(`vault.update_secret` — create는 자리 시크릿과 duplicate). Vault→pg_net→Discord 테스트 메시지 204 확인, `vl_alert_check()` 무에러·발송 0(현 p75 1514 < 2500 경계라 정상). 이제 알림은 완전 가동 상태.
+- 아직 안 된 것: **kt-market 프로덕션(api.ktmarket.co.kr Next.js 앱)에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
 ### 보안 수정 기록 (2026-08-24)
 `0001_init.sql`의 `revoke all on function ... from public` 만으로는 Supabase가 default privilege로 `anon`/`authenticated`에 준 EXECUTE가 남는다. 그 결과 publishable 키만으로 `vl_prune(0)` 을 호출해 `events` 전체를 지울 수 있었다. `revoke execute ... from anon, authenticated` 를 `0001_init.sql`에 추가하고 원격에는 `0002`로 적용. **함수 권한은 `from public` 이 아니라 역할을 명시해 회수할 것.**
