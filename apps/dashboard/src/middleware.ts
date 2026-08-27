@@ -67,5 +67,7 @@ export function middleware(req: NextRequest): NextResponse {
 
 export const config = {
   // 정적 자산과 favicon은 인증 대상에서 제외 — 페이지·데이터 경로만 막는다.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // vital-lens.min.js 는 Framer 등 외부 사이트가 <script src>로 가져가는 공개 배포물이라
+  // 인증 뒤에 두면 수집 자체가 불가능하다. 수집 데이터가 아니라 수집기 코드일 뿐이므로 공개해도 안전.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|vital-lens\\.min\\.js).*)'],
 };
