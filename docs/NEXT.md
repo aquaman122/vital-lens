@@ -57,6 +57,10 @@
 - **npm publish 패키징 완료 (2026-08-27)**: `packages/collector`에 exports 맵·repository·keywords·`publishConfig.access=public`·unpkg/jsdelivr 엔트리·LICENSE(루트 MIT 사본)·패키지 README 추가. `prepublishOnly`가 빌드+gzip 4096B 게이트를 강제한다. `npm pack --dry-run` 6파일 7.4KB 확인. 이름 `@vital-lens/collector`는 레지스트리에서 비어 있음(404).
   - **발행 자체는 사람 몫**: `npm login` 후 `packages/collector`에서 `npm publish`. 스코프 패키지라 npm에 `vital-lens` org를 먼저 만들거나(권장), 스코프를 개인 계정명으로 바꿔야 한다. 발행되면 README 방법 B가 실제로 동작한다.
 - **collector 갱신 전파 (2026-08-27)**: kt-market은 `juntelecom/apps/kt-market/public/vital-lens.min.js`에 INP-attribution 빌드(3647B gzip) 복사 완료 — **커밋은 안 됐다**(권한 분류기가 다른 리포 커밋을 막음). juntelecom 작업 트리에 unstaged로 남아 있으니 사람이 커밋할 것. zini-pinlog는 **로컬 클론이 이 머신에 없어서** 전파 불가 — 클론을 받거나 다른 머신에서 같은 파일을 복사해야 한다.
+- **kt-market 측정 지점 정정 (2026-08-27)**: 실사용자 페이지는 **ktmarket.co.kr(Framer)**이고 api.ktmarket.co.kr은 API 서버라 브라우저 페이지가 없다 — RUM 부착 대상이 아니다. API 지연은 Framer 페이지의 LCP·INP에 이미 반영된다.
+  - 부착 방식: Framer Site Settings → Custom Code → End of body에 script 태그(방법 A). Framer는 정적 파일 호스팅이 안 되고 npm publish는 대기 중이라, **대시보드 앱이 `/vital-lens.min.js`를 공개 서빙**한다(`0de19fc`) — 미들웨어 matcher에서 이 경로만 인증 제외. 수집기 코드일 뿐 수집 데이터가 아니라 공개 안전. publish 후 unpkg URL로 교체 예정.
+  - 검증: script 무인증 200 / 페이지 401 유지 / 서빙 파일 = 최신 INP-attribution 빌드 일치.
+  - **release 기준**: Framer엔 커밋 SHA가 없어 `data-release`를 publish마다 사람이 갱신한다(예: `framer-0827`). 안 바꾸면 `unknown` — 웹훅 알림에서 제외되므로 배포별 비교를 쓰려면 갱신 습관 필요. site id는 `kt-market` 재사용(실 UX가 Framer 사이트).
 - 아직 안 된 것: **kt-market 프로덕션에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
 ### 보안 수정 기록 (2026-08-24)
