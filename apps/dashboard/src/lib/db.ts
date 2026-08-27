@@ -60,6 +60,14 @@ export type LcpElement = {
   render_delay_p75: number | null;
 };
 
+export type ExternalDaily = {
+  source: 'clarity' | 'ga4';
+  day: string;
+  metric: string;
+  dim: string;
+  value: number;
+};
+
 export type RecentError = {
   site_id: string;
   ts: string;
@@ -135,6 +143,16 @@ export async function fetchLcpElements(siteId: string): Promise<LcpElement[]> {
     .limit(15);
   if (error) throw error;
   return data as LcpElement[];
+}
+
+export async function fetchExternalDaily(): Promise<ExternalDaily[]> {
+  const { data, error } = await db()
+    .from('vl_external_daily')
+    .select('*')
+    .gte('day', new Date(Date.now() - 28 * 86400e3).toISOString().slice(0, 10))
+    .order('day', { ascending: false });
+  if (error) throw error;
+  return data as ExternalDaily[];
 }
 
 export async function fetchErrors(siteId: string): Promise<RecentError[]> {

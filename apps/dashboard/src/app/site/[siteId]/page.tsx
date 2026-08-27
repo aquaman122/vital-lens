@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import MetricTrend, { type Point } from '@/components/MetricTrend';
-import { fetchDaily, fetchErrors, fetchLcpElements, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
+import { fetchDaily, fetchErrors, fetchExternalDaily, fetchLcpElements, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +17,48 @@ function fmtMetric(name: string, v: number | null): string {
 
 export default async function SitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const [daily, releases, pages, errors, interactions, lcpElements] = await Promise.all([
+  const [daily, releases, pages, errors, interactions, lcpElements, external] = await Promise.all([
     fetchDaily(siteId),
     fetchReleases(siteId),
     fetchPages(siteId),
     fetchErrors(siteId),
     fetchSlowInteractions(siteId),
     fetchLcpElements(siteId),
+    fetchExternalDaily(),
   ]);
+
+  // path 조인: LCP 나쁜 페이지 × GA4 트래픽 × Clarity 문제 행동.
+  // "어딜 고쳐야 하나"에 답하는 표 — 트래픽이 많고 느린 페이지가 위로 온다.
+  const ga4ByPath = new Map<string, number>();
+  const clarityByPath = new Map<string, { rage: number; dead: number }>();
+  for (const e of external) {
+    if (!e.dim) continue;
+    if (e.source === 'ga4' && e.metric === 'sessions') {
+      ga4ByPath.set(e.dim, (ga4ByPath.get(e.dim) ?? 0) + e.value);
+    }
+    if (e.source === 'clarity') {
+      let path = e.dim;
+      try {
+        path = new URL(e.dim).pathname;
+      } catch {}
+      const cur = clarityByPath.get(path) ?? { rage: 0, dead: 0 };
+      if (e.metric === 'RageClickCount') cur.rage += e.value;
+      if (e.metric === 'DeadClickCount') cur.dead += e.value;
+      clarityByPath.set(path, cur);
+    }
+  }
+  const problems = pages
+    .map((p) => ({
+      path: p.path,
+      lcp: p.p75,
+      samples: p.samples,
+      sessions: ga4ByPath.get(p.path) ?? null,
+      rage: clarityByPath.get(p.path)?.rage ?? null,
+      dead: clarityByPath.get(p.path)?.dead ?? null,
+    }))
+    .sort((a, b) => (b.lcp ?? 0) * Math.log1p(b.sessions ?? 0) - (a.lcp ?? 0) * Math.log1p(a.sessions ?? 0))
+    .slice(0, 10);
+  const hasExternal = external.length > 0;
 
   // 디바이스 합산: 일별로 samples 가중 없이 단순 p75 재계산은 불가하므로 device='mobile' 우선, 없으면 전체 중 최대 샘플 device
   const byMetric = (metric: string): Point[] => {
@@ -137,6 +171,37 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
           </tbody>
         </table>
       </div>
+
+      {hasExternal && (
+        <>
+          <h2>문제 후보 (LCP × 트래픽 × 행동)</h2>
+          <p className="sub">느린데 트래픽까지 많은 페이지가 위로. rage/dead click은 Clarity, 세션은 GA4.</p>
+          <div className="card tablewrap" style={{ padding: 0 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>path</th>
+                  <th className="num">LCP p75 (ms)</th>
+                  <th className="num">세션(GA4)</th>
+                  <th className="num">rage click</th>
+                  <th className="num">dead click</th>
+                </tr>
+              </thead>
+              <tbody>
+                {problems.map((p) => (
+                  <tr key={p.path}>
+                    <td className="mono">{p.path}</td>
+                    <td className="num">{fmtMetric('LCP', p.lcp)}</td>
+                    <td className="num">{p.sessions == null ? '–' : p.sessions.toLocaleString()}</td>
+                    <td className="num">{p.rage == null ? '–' : p.rage.toLocaleString()}</td>
+                    <td className="num">{p.dead == null ? '–' : p.dead.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <h2>LCP 요소 (무엇이 페이지를 느리게 하나)</h2>
       <div className="card tablewrap" style={{ padding: 0 }}>
