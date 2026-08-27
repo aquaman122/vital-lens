@@ -53,7 +53,11 @@ function deviceType(): string {
   return 'desktop';
 }
 
-/** INP attribution용 CSS 셀렉터 — id에서 끊고, 최대 4단계. */
+/**
+ * attribution용 셀렉터 — id나 사람이 지은 이름에서 끊고, 최대 4단계.
+ * Framer는 레이어 이름을 data-framer-name으로 전 요소에 실어 내보내므로
+ * 그걸 읽으면 div 더미 대신 "div[Hero]>img" 같은 사람 언어가 나온다.
+ */
 function selector(el: unknown): string | undefined {
   const parts: string[] = [];
   let n = el as Element | null;
@@ -61,6 +65,11 @@ function selector(el: unknown): string | undefined {
     let s = n.nodeName.toLowerCase();
     if (n.id) {
       parts.unshift(`${s}#${n.id}`);
+      break;
+    }
+    const nm = n.getAttribute('data-framer-name') || n.getAttribute('aria-label');
+    if (nm) {
+      parts.unshift(`${s}[${nm.slice(0, 40)}]`);
       break;
     }
     const c = typeof n.className === 'string' && n.className.trim().split(/\s+/)[0];
