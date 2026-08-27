@@ -160,13 +160,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         await client.from('vl_external_raw').upsert({ source: name, day, payload: raw });
       }
       if (rows.length) {
-        const { error } = await client.from('vl_external_daily').upsert(rows);
+        // 같은 (source,day,metric,dim) 키가 한 배치에 여러 번 오면 upsert가 충돌한다
+        // (Clarity URL 분해는 정보 행이 키를 공유할 수 있다) — 합산해 1행으로.
+        const merged = new Map<string, Row>();
+        for (const r of rows) {
+          const k = `${r.metric}|${r.dim}`;
+          const ex = merged.get(k);
+          if (ex) ex.value += r.value;
+          else merged.set(k, { ...r });
+        }
+        const { error } = await client.from('vl_external_daily').upsert([...merged.values()]);
         if (error) throw error;
       }
       result[name] = rows.length ? `${rows.length} rows` : 'skipped (env 미설정)';
     } catch (e) {
       // 한 소스가 죽어도 다른 소스는 적재한다
-      result[name] = `error: ${e instanceof Error ? e.message : String(e)}`;
+      result[name] = `error: ${e instanceof Error ? e.message : JSON.stringify(e).slice(0, 300)}`;
     }
   }
   return NextResponse.json(result);
