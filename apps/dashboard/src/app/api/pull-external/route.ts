@@ -132,6 +132,30 @@ async function pullGa4(day: string): Promise<{ rows: Row[]; raw: unknown }> {
     });
   }
   for (const [metric, value] of totals) rows.push({ source: 'ga4', day, metric, dim: '', value });
+
+  // 전환 이벤트 후보 파악용: eventName별 발생 수. GA4에 뭐가 정의돼 있는지는 데이터가 알려준다.
+  const evRes = await fetch(
+    `https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateRanges: [{ startDate: day, endDate: day }],
+        metrics: [{ name: 'eventCount' }],
+        dimensions: [{ name: 'eventName' }],
+        limit: 30,
+      }),
+    }
+  );
+  if (evRes.ok) {
+    const ev = (await evRes.json()) as typeof data;
+    for (const r of ev.rows ?? []) {
+      const name = r.dimensionValues[0]?.value?.slice(0, 80);
+      const v = Number(r.metricValues[0]?.value);
+      if (name && Number.isFinite(v))
+        rows.push({ source: 'ga4', day, metric: `event:${name}`, dim: '', value: v });
+    }
+  }
   return { rows, raw: data };
 }
 
@@ -146,11 +170,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const day = kstYesterday();
   const client = db();
   const result: Record<string, unknown> = { day };
+  // ?only=ga4 — Clarity는 하루 10요청 제한이라 수동 검증 시 소모하지 않도록
+  const only = req.nextUrl.searchParams.get('only');
 
   for (const [name, pull] of [
     ['clarity', pullClarity],
     ['ga4', pullGa4],
   ] as const) {
+    if (only && only !== name) {
+      result[name] = 'skipped (only=' + only + ')';
+      continue;
+    }
     try {
       const { rows, raw } = await pull(day);
       if (raw != null) {

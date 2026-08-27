@@ -76,6 +76,23 @@ export type ExternalSummary = {
   total: number | null;
 };
 
+export type FunnelRow = {
+  site_id: string;
+  path: string;
+  sessions: number;
+  info_sessions: number;
+  conversions: number;
+  cvr_pct: string | number;
+};
+
+export type SpeedCvrRow = {
+  site_id: string;
+  lcp_bucket: 'good' | 'needs-improvement' | 'poor';
+  sessions: number;
+  conversions: number;
+  cvr_pct: string | number;
+};
+
 export type RecentError = {
   site_id: string;
   ts: string;
@@ -175,6 +192,26 @@ export async function fetchExternalPaths(): Promise<ExternalDaily[]> {
     .limit(3000);
   if (error) throw error;
   return data as ExternalDaily[];
+}
+
+export async function fetchFunnel(siteId: string): Promise<FunnelRow[]> {
+  const { data, error } = await db()
+    .from('vl_funnel')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('sessions', { ascending: false })
+    .limit(15);
+  if (error) throw error;
+  return data as FunnelRow[];
+}
+
+export async function fetchSpeedCvr(siteId: string): Promise<SpeedCvrRow[]> {
+  const { data, error } = await db()
+    .from('vl_speed_vs_conversion')
+    .select('*')
+    .eq('site_id', siteId);
+  if (error) throw error;
+  return data as SpeedCvrRow[];
 }
 
 export async function fetchErrors(siteId: string): Promise<RecentError[]> {

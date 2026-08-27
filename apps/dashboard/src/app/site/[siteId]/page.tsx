@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import MetricTrend, { type Point } from '@/components/MetricTrend';
-import { fetchDaily, fetchErrors, fetchExternalPaths, fetchExternalSummary, fetchLcpElements, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
+import { fetchDaily, fetchErrors, fetchExternalPaths, fetchExternalSummary, fetchFunnel, fetchLcpElements, fetchPages, fetchReleases, fetchSlowInteractions, fetchSpeedCvr } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,7 @@ function fmtMetric(name: string, v: number | null): string {
 
 export default async function SitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const [daily, releases, pages, errors, interactions, lcpElements, external, extSummary] = await Promise.all([
+  const [daily, releases, pages, errors, interactions, lcpElements, external, extSummary, funnel, speedCvr] = await Promise.all([
     fetchDaily(siteId),
     fetchReleases(siteId),
     fetchPages(siteId),
@@ -26,6 +26,8 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
     fetchLcpElements(siteId),
     fetchExternalPaths(),
     fetchExternalSummary(),
+    fetchFunnel(siteId),
+    fetchSpeedCvr(siteId),
   ]);
 
   // path 조인: LCP 나쁜 페이지 × GA4 트래픽 × Clarity 문제 행동.
@@ -196,6 +198,44 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
           </tbody>
         </table>
       </div>
+
+      {funnel.length > 0 && (
+        <>
+          <h2>전환 퍼널 (상세 → 정보입력 → 신청완료)</h2>
+          <p className="sub">
+            vital-lens 세션 단위 실측. 속도별 전환율:{' '}
+            {speedCvr
+              .sort((a, b) => a.lcp_bucket.localeCompare(b.lcp_bucket))
+              .map((r) => `LCP ${r.lcp_bucket} ${Number(r.cvr_pct)}% (${r.sessions}세션)`)
+              .join(' · ')}{' '}
+            — 상관이지 인과 증명은 아니다.
+          </p>
+          <div className="card tablewrap" style={{ padding: 0 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>진입 상세 페이지</th>
+                  <th className="num">세션</th>
+                  <th className="num">정보입력 도달</th>
+                  <th className="num">신청완료</th>
+                  <th className="num">전환율</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.map((f) => (
+                  <tr key={f.path}>
+                    <td className="mono">{f.path}</td>
+                    <td className="num">{f.sessions.toLocaleString()}</td>
+                    <td className="num">{f.info_sessions.toLocaleString()}</td>
+                    <td className="num">{f.conversions.toLocaleString()}</td>
+                    <td className="num">{Number(f.cvr_pct)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {hasExternal && (
         <>
