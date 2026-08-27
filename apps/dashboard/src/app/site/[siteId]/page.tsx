@@ -60,6 +60,32 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
     .slice(0, 10);
   const hasExternal = external.length > 0;
 
+  // 외부 지표 요약: 가장 최근 적재일 기준. GA4는 합계 행(dim='')이 있고,
+  // Clarity는 URL 분해 행뿐이라 count성 지표만 합산한다(_pct는 합산이 왜곡이라 제외).
+  const latestDay = external.reduce((m, e) => (e.day > m ? e.day : m), '');
+  const latest = external.filter((e) => e.day === latestDay);
+  const ga4Total = (metric: string): number | null =>
+    latest.find((e) => e.source === 'ga4' && e.metric === metric && e.dim === '')?.value ?? null;
+  const claritySum = (metric: string): number | null => {
+    const rows = latest.filter((e) => e.source === 'clarity' && e.metric === metric && e.dim !== '');
+    return rows.length ? rows.reduce((n, e) => n + e.value, 0) : null;
+  };
+  const clarityTop = (metric: string) =>
+    latest
+      .filter((e) => e.source === 'clarity' && e.metric === metric && e.dim !== '' && e.value > 0)
+      .map((e) => {
+        let path = e.dim;
+        try {
+          path = new URL(e.dim).pathname;
+        } catch {}
+        return { path, value: e.value };
+      })
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  const rageTop = clarityTop('RageClickCount');
+  const deadTop = clarityTop('DeadClickCount');
+  const fmtInt = (v: number | null) => (v == null ? '–' : Math.round(v).toLocaleString());
+
   // 디바이스 합산: 일별로 samples 가중 없이 단순 p75 재계산은 불가하므로 device='mobile' 우선, 없으면 전체 중 최대 샘플 device
   const byMetric = (metric: string): Point[] => {
     const rows = daily.filter((d) => d.name === metric && d.p75 != null);
@@ -174,6 +200,54 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
 
       {hasExternal && (
         <>
+          <h2>외부 지표 요약 ({latestDay})</h2>
+          <div className="grid3">
+            <div className="card">
+              <h3>GA4 트래픽</h3>
+              <table>
+                <tbody>
+                  <tr><td>세션</td><td className="num">{fmtInt(ga4Total('sessions'))}</td></tr>
+                  <tr><td>사용자</td><td className="num">{fmtInt(ga4Total('activeUsers'))}</td></tr>
+                  <tr><td>페이지뷰</td><td className="num">{fmtInt(ga4Total('screenPageViews'))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="card">
+              <h3>Clarity 문제 행동 (합산)</h3>
+              <table>
+                <tbody>
+                  <tr><td>rage click</td><td className="num">{fmtInt(claritySum('RageClickCount'))}</td></tr>
+                  <tr><td>dead click</td><td className="num">{fmtInt(claritySum('DeadClickCount'))}</td></tr>
+                  <tr><td>error click</td><td className="num">{fmtInt(claritySum('ErrorClickCount'))}</td></tr>
+                  <tr><td>quickback</td><td className="num">{fmtInt(claritySum('QuickbackClick'))}</td></tr>
+                  <tr><td>script error</td><td className="num">{fmtInt(claritySum('ScriptErrorCount'))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="card">
+              <h3>행동 문제 top 페이지</h3>
+              <table>
+                <tbody>
+                  {rageTop.map((r) => (
+                    <tr key={`r${r.path}`}>
+                      <td className="mono">{r.path}</td>
+                      <td className="num">rage {fmtInt(r.value)}</td>
+                    </tr>
+                  ))}
+                  {deadTop.map((r) => (
+                    <tr key={`d${r.path}`}>
+                      <td className="mono">{r.path}</td>
+                      <td className="num">dead {fmtInt(r.value)}</td>
+                    </tr>
+                  ))}
+                  {rageTop.length + deadTop.length === 0 && (
+                    <tr><td style={{ color: 'var(--text-muted)' }}>문제 행동 없음 🎉</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <h2>문제 후보 (LCP × 트래픽 × 행동)</h2>
           <p className="sub">느린데 트래픽까지 많은 페이지가 위로. rage/dead click은 Clarity, 세션은 GA4.</p>
           <div className="card tablewrap" style={{ padding: 0 }}>
