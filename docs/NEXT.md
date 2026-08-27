@@ -73,7 +73,9 @@
 - **외부 지표 연동 구축 (2026-08-27)**: Clarity Data Export + GA4 Data API를 하루 1회 적재해 vital-lens LCP와 path 조인 — "느린데 트래픽 많고 rage click까지 있는 페이지"를 한 표로. 마이그레이션 `0008`(`vl_external_daily`·`vl_external_raw`, RLS on 무정책, service key 쓰기).
   - pull은 대시보드 `/api/pull-external` + **Vercel Cron**(19:40 UTC = KST 04:40, `apps/dashboard/vercel.json`). pg_cron이 아닌 이유: GA4 서비스 계정 인증에 RS256 JWT 서명이 필요한데 Postgres(pgjwt)는 HMAC만 된다. Clarity는 하루 10요청 제한이라 크론 1회가 정확히 맞다.
   - 라우트는 Basic 인증 matcher에서 제외하고 자체 `CRON_SECRET` Bearer로 fail-closed 잠금(등록 완료). 한 소스가 죽어도 다른 소스는 적재된다.
-  - env: `CLARITY_API_TOKEN`(사람이 파일로 전달 대기), `GA4_PROPERTY_ID`/`GA4_CLIENT_EMAIL`/`GA4_PRIVATE_KEY`(GCP 서비스 계정 생성 대기 — Looker Studio 아님, console.cloud.google.com에서 Analytics Data API 활성화 + 서비스 계정 + GA4 속성 뷰어 권한). env 없으면 해당 소스만 skip.
+  - **env 5개 전부 등록·검증 완료 (2026-08-27)**: `CLARITY_API_TOKEN`(sensitive), `GA4_PROPERTY_ID=398772247`, `GA4_CLIENT_EMAIL=vital-lens@juntell.iam.gserviceaccount.com`, `GA4_PRIVATE_KEY`(sensitive, \n 이스케이프 — 라우트가 되돌림), `CRON_SECRET`(sensitive). GA4는 GCP 프로젝트 `juntell`에서 Analytics Data API 활성화 + 서비스 계정 뷰어(GA_READER) 권한.
+  - **첫 적재 성공**: clarity 3885행(13메트릭×URL 335개), ga4 253행(5메트릭×pagePath 51개). 첫 시도는 Clarity URL 분해 행이 같은 (metric,dim) 키를 공유해 배치 upsert PK 충돌 — 병합(합산) 후 upsert로 수정(`66ba786`).
+  - Clarity 하루 10요청 제한 주의: 검증 과정에서 수 회 소모했다. **재트리거 루프 금지** — 폴링 루프 안에 Clarity 호출을 넣으면 쿼터가 즉시 마른다. 배포 상태는 알리아스 URL로 확인할 것(배포별 URL은 Vercel 보호로 401/200이 아닌 리다이렉트를 준다).
   - 대시보드 "문제 후보" 표: LCP p75 × log(세션) 정렬, rage/dead click 병기. 외부 데이터가 한 건이라도 있어야 표시된다.
 - 아직 안 된 것: **kt-market 프로덕션(api.ktmarket.co.kr Next.js 앱)에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
