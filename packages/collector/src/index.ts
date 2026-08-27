@@ -30,12 +30,17 @@ type Ev = {
     message?: string;
     stack?: string;
     source?: string;
-    // INP attribution
+    // INP/LCP attribution (target은 공용)
     target?: string;
     interaction?: string;
     input_delay?: number;
     processing?: number;
     presentation?: number;
+    // LCP attribution
+    lcp_url?: string;
+    load_delay?: number;
+    load_time?: number;
+    render_delay?: number;
   };
 };
 
@@ -92,6 +97,10 @@ export function init(cfg: VitalLensConfig): void {
 
   const url = `${cfg.endpoint.replace(/\/$/, '')}/rest/v1/rpc/vl_ingest`;
   const sid = sessionId();
+  // 최초 로드 path — LCP/FCP/TTFB/CLS는 스펙상 최초 로드에만 확정되므로,
+  // 보고가 늦게(hide 시점) 와도 랜딩 path로 귀속시킨다. INP·에러·pageview는 현재 path.
+  const p0 = location.pathname;
+  const seen = new Set<string>();
   const base = () => ({
     path: location.pathname,
     release: cfg.release ?? 'unknown',
@@ -141,6 +150,23 @@ export function init(cfg: VitalLensConfig): void {
   // Core Web Vitals — 각 메트릭은 페이지 수명 중 확정될 때 보고됨
   const onMetric = (m: Metric) => {
     const ev: Ev = { type: 'metric', name: m.name, value: m.value, rating: m.rating, ...base() };
+    if (m.name !== 'INP') ev.path = p0;
+    // LCP attribution: 어떤 요소·리소스가 LCP인지 + 시간 분해.
+    // attribution 빌드 대신 entries + resource timing으로 직접 계산 (INP와 같은 이유 — 예산).
+    if (m.name === 'LCP') {
+      const l = m.entries?.[m.entries.length - 1] as any;
+      if (l) {
+        const t = (performance.getEntriesByType('navigation')[0] as any)?.responseStart ?? 0;
+        const r = l.url ? (performance.getEntriesByName(l.url)[0] as any) : undefined;
+        ev.detail = {
+          target: selector(l.element),
+          lcp_url: l.url ? String(l.url).slice(0, 300) : undefined,
+          load_delay: r ? Math.round(Math.max(0, r.startTime - t)) : undefined,
+          load_time: r ? Math.round(Math.max(0, r.responseEnd - r.startTime)) : undefined,
+          render_delay: Math.round(Math.max(0, m.value - (r ? r.responseEnd : t))),
+        };
+      }
+    }
     // INP attribution: web-vitals/attribution 빌드는 gzip 예산(4KB)을 넘겨서 못 쓴다.
     // 같은 정보가 metric.entries(PerformanceEventTiming)에 있으므로 직접 계산한다.
     const e = m.name === 'INP' ? (m.entries?.[0] as PerformanceEventTiming | undefined) : undefined;
@@ -164,6 +190,9 @@ export function init(cfg: VitalLensConfig): void {
 
   // JS 에러
   window.addEventListener('error', (e) => {
+    const k = String(e.message ?? '');
+    if (seen.has(k) || seen.size > 100) return;
+    seen.add(k);
     push({
       type: 'error',
       name: e.error?.name ?? 'Error',
@@ -177,6 +206,9 @@ export function init(cfg: VitalLensConfig): void {
   });
   window.addEventListener('unhandledrejection', (e) => {
     const r: any = e.reason;
+    const k = String(r?.message ?? r ?? '');
+    if (seen.has(k) || seen.size > 100) return;
+    seen.add(k);
     push({
       type: 'error',
       name: r?.name ?? 'UnhandledRejection',
@@ -189,6 +221,21 @@ export function init(cfg: VitalLensConfig): void {
   });
 
   push({ type: 'pageview', name: 'pageview', ...base() });
+
+  // Framer 등 SPA는 내부 이동이 클라이언트 라우팅이라 로드가 다시 일어나지 않는다.
+  // pushState/popstate에서 path가 바뀌면 pageview를 추가 기록해 path별 트래픽을 살린다.
+  let lastPath = p0;
+  const soft = () => {
+    if (location.pathname === lastPath) return;
+    lastPath = location.pathname;
+    push({ type: 'pageview', name: 'pageview', ...base() });
+  };
+  const hp = history.pushState;
+  history.pushState = function (...a: Parameters<typeof hp>) {
+    hp.apply(this, a);
+    soft();
+  };
+  addEventListener('popstate', soft);
 
   // 페이지 이탈 시 남은 버퍼를 beacon으로
   addEventListener('visibilitychange', () => {

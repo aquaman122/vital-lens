@@ -48,6 +48,18 @@ export type SlowInteraction = {
   presentation_p75: number | null;
 };
 
+export type LcpElement = {
+  site_id: string;
+  path: string;
+  target: string;
+  lcp_url: string | null;
+  samples: number;
+  p75: number | null;
+  load_delay_p75: number | null;
+  load_time_p75: number | null;
+  render_delay_p75: number | null;
+};
+
 export type RecentError = {
   site_id: string;
   ts: string;
@@ -112,6 +124,17 @@ export async function fetchSlowInteractions(siteId: string): Promise<SlowInterac
     .limit(15);
   if (error) throw error;
   return data as SlowInteraction[];
+}
+
+export async function fetchLcpElements(siteId: string): Promise<LcpElement[]> {
+  const { data, error } = await db()
+    .from('vl_lcp_elements')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('p75', { ascending: false })
+    .limit(15);
+  if (error) throw error;
+  return data as LcpElement[];
 }
 
 export async function fetchErrors(siteId: string): Promise<RecentError[]> {

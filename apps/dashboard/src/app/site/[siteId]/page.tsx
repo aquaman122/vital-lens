@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import MetricTrend, { type Point } from '@/components/MetricTrend';
-import { fetchDaily, fetchErrors, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
+import { fetchDaily, fetchErrors, fetchLcpElements, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,12 +17,13 @@ function fmtMetric(name: string, v: number | null): string {
 
 export default async function SitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const [daily, releases, pages, errors, interactions] = await Promise.all([
+  const [daily, releases, pages, errors, interactions, lcpElements] = await Promise.all([
     fetchDaily(siteId),
     fetchReleases(siteId),
     fetchPages(siteId),
     fetchErrors(siteId),
     fetchSlowInteractions(siteId),
+    fetchLcpElements(siteId),
   ]);
 
   // 디바이스 합산: 일별로 samples 가중 없이 단순 p75 재계산은 불가하므로 device='mobile' 우선, 없으면 전체 중 최대 샘플 device
@@ -131,6 +132,45 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
                 <td className="mono">{p.path}</td>
                 <td className="num">{fmtMetric('LCP', p.p75)}</td>
                 <td className="num">{p.samples.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2>LCP 요소 (무엇이 페이지를 느리게 하나)</h2>
+      <div className="card tablewrap" style={{ padding: 0 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>path</th>
+              <th>대상 요소</th>
+              <th className="num">LCP p75 (ms)</th>
+              <th className="num">로드 지연</th>
+              <th className="num">로드</th>
+              <th className="num">렌더 지연</th>
+              <th className="num">샘플</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lcpElements.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ color: 'var(--text-muted)' }}>
+                  아직 데이터가 없습니다 — attribution 빌드 배포 후부터 쌓입니다
+                </td>
+              </tr>
+            )}
+            {lcpElements.map((l) => (
+              <tr key={`${l.path}|${l.target}|${l.lcp_url}`}>
+                <td className="mono">{l.path}</td>
+                <td className="mono" title={l.lcp_url ?? undefined}>
+                  {l.target}
+                </td>
+                <td className="num">{fmtMetric('LCP', l.p75)}</td>
+                <td className="num">{fmtMetric('LCP', l.load_delay_p75)}</td>
+                <td className="num">{fmtMetric('LCP', l.load_time_p75)}</td>
+                <td className="num">{fmtMetric('LCP', l.render_delay_p75)}</td>
+                <td className="num">{l.samples.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>

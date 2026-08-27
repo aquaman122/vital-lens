@@ -61,6 +61,11 @@
   - 부착 방식: Framer Site Settings → Custom Code → End of body에 script 태그(방법 A). Framer는 정적 파일 호스팅이 안 되고 npm publish는 대기 중이라, **대시보드 앱이 `/vital-lens.min.js`를 공개 서빙**한다(`0de19fc`) — 미들웨어 matcher에서 이 경로만 인증 제외. 수집기 코드일 뿐 수집 데이터가 아니라 공개 안전. publish 후 unpkg URL로 교체 예정.
   - 검증: script 무인증 200 / 페이지 401 유지 / 서빙 파일 = 최신 INP-attribution 빌드 일치.
   - **release 기준**: Framer엔 커밋 SHA가 없어 `data-release`를 publish마다 사람이 갱신한다(예: `framer-0827`). 안 바꾸면 `unknown` — 웹훅 알림에서 제외되므로 배포별 비교를 쓰려면 갱신 습관 필요. site id는 `kt-market` 재사용(실 UX가 Framer 사이트).
+- **측정 고도화 3종 (2026-08-27, Framer 부착 전)**: 마이그레이션 `0007_lcp_attribution` 원격 적용·검증 완료. collector gzip 3918/4096B.
+  - **LCP attribution**: LCP `entries` 마지막 엔트리 + resource timing으로 target 셀렉터·`lcp_url`·load_delay/load_time/render_delay 직접 계산(INP와 같은 이유로 attribution 빌드 안 씀). `vl_ingest` 화이트리스트 4키 추가, `vl_lcp_elements` 뷰 + 대시보드 "LCP 요소" 표. RPC로 악성 키 폐기·집계 검증.
+  - **SPA soft-nav**: Framer 내부 이동은 클라이언트 라우팅이라 path별 트래픽이 랜딩에 뭉치던 것 수정 — `pushState`/`popstate` 훅으로 path 변경 시 pageview 추가 기록. **LCP/FCP/TTFB/CLS는 랜딩 path에 고정 귀속**(스펙상 최초 로드에만 확정 — hide 시점 보고라 soft-nav 후 현재 path로 오귀속되던 기존 버그도 함께 수정), INP·에러·pageview는 현재 path.
+  - **에러 dedup**: 세션 내 동일 message 1회만 전송(상한 100종) — 에러 루프가 행을 쏟는 것 차단.
+  - vm 셔임 스모크 테스트로 soft-nav 중복 방지·dedup 확인. 새 빌드는 dashboard `public/`(Framer CDN)과 juntelecom kt-market `public/`에 복사됨(후자 커밋은 사람 몫).
 - 아직 안 된 것: **kt-market 프로덕션에 collector 코드가 없다.** 부착 커밋 `c0597f8`은 `origin/dev`·`feat/phone-detail-page`·`feat/userinfo-direct-confirm`에만 있고 kt-market의 프로덕션 브랜치인 `origin/main`에는 없다. env는 넣어놨으니 다음 정규 릴리스(dev→main)에 collector가 실리면 그때부터 실트래픽이 들어온다. 그 전까지 대시보드에 쌓이는 건 로컬 `dev` release 데이터뿐이다.
 
 ### 보안 수정 기록 (2026-08-24)
