@@ -68,6 +68,14 @@ export type ExternalDaily = {
   value: number;
 };
 
+export type ExternalSummary = {
+  source: 'clarity' | 'ga4';
+  day: string;
+  metric: string;
+  dim_sum: number | null;
+  total: number | null;
+};
+
 export type RecentError = {
   site_id: string;
   ts: string;
@@ -145,12 +153,26 @@ export async function fetchLcpElements(siteId: string): Promise<LcpElement[]> {
   return data as LcpElement[];
 }
 
-export async function fetchExternalDaily(): Promise<ExternalDaily[]> {
+export async function fetchExternalSummary(): Promise<ExternalSummary[]> {
   const { data, error } = await db()
-    .from('vl_external_daily')
+    .from('vl_external_summary')
     .select('*')
     .gte('day', new Date(Date.now() - 28 * 86400e3).toISOString().slice(0, 10))
     .order('day', { ascending: false });
+  if (error) throw error;
+  return data as ExternalSummary[];
+}
+
+// path 조인·top 페이지에 필요한 세 메트릭만 — 전 행을 가져오면 1000행 제한에 잘린다
+export async function fetchExternalPaths(): Promise<ExternalDaily[]> {
+  const { data, error } = await db()
+    .from('vl_external_daily')
+    .select('*')
+    .in('metric', ['sessions', 'RageClickCount', 'DeadClickCount'])
+    .neq('dim', '')
+    .gte('day', new Date(Date.now() - 7 * 86400e3).toISOString().slice(0, 10))
+    .order('day', { ascending: false })
+    .limit(3000);
   if (error) throw error;
   return data as ExternalDaily[];
 }

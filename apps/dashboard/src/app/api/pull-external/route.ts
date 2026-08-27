@@ -45,12 +45,9 @@ async function pullClarity(day: string): Promise<{ rows: Row[]; raw: unknown }> 
     for (const info of m.information ?? []) {
       // URL 분해가 요청되면 information에 Url 키가 실린다. 없으면 전체 합계.
       const dim = typeof info.Url === 'string' ? info.Url.slice(0, 300) : '';
-      // 지표별로 값 키가 달라서, 숫자로 읽히는 대표 키를 관용적으로 고른다.
-      const v =
-        num(info.totalSessionCount) ??
-        num(info.sessionsCount) ??
-        num(info.subTotal) ??
-        num(info.pagesViews);
+      // 행동 지표의 실제 개수는 subTotal이다. sessionsCount는 그 URL의 세션 수라
+      // 우선순위에 넣으면 모든 지표가 같은 값이 된다(실측으로 확인). Traffic은 totalSessionCount.
+      const v = num(info.subTotal) ?? num(info.totalSessionCount) ?? num(info.pagesViews);
       if (v != null) rows.push({ source: 'clarity', day, metric: m.metricName, dim, value: v });
       const pct = num(info.sessionsWithMetricPercentage);
       if (pct != null)

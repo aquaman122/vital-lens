@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import MetricTrend, { type Point } from '@/components/MetricTrend';
-import { fetchDaily, fetchErrors, fetchExternalDaily, fetchLcpElements, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
+import { fetchDaily, fetchErrors, fetchExternalPaths, fetchExternalSummary, fetchLcpElements, fetchPages, fetchReleases, fetchSlowInteractions } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +17,15 @@ function fmtMetric(name: string, v: number | null): string {
 
 export default async function SitePage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
-  const [daily, releases, pages, errors, interactions, lcpElements, external] = await Promise.all([
+  const [daily, releases, pages, errors, interactions, lcpElements, external, extSummary] = await Promise.all([
     fetchDaily(siteId),
     fetchReleases(siteId),
     fetchPages(siteId),
     fetchErrors(siteId),
     fetchSlowInteractions(siteId),
     fetchLcpElements(siteId),
-    fetchExternalDaily(),
+    fetchExternalPaths(),
+    fetchExternalSummary(),
   ]);
 
   // path 조인: LCP 나쁜 페이지 × GA4 트래픽 × Clarity 문제 행동.
@@ -58,18 +59,16 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
     }))
     .sort((a, b) => (b.lcp ?? 0) * Math.log1p(b.sessions ?? 0) - (a.lcp ?? 0) * Math.log1p(a.sessions ?? 0))
     .slice(0, 10);
-  const hasExternal = external.length > 0;
+  const hasExternal = extSummary.length > 0;
 
-  // 외부 지표 요약: 가장 최근 적재일 기준. GA4는 합계 행(dim='')이 있고,
-  // Clarity는 URL 분해 행뿐이라 count성 지표만 합산한다(_pct는 합산이 왜곡이라 제외).
-  const latestDay = external.reduce((m, e) => (e.day > m ? e.day : m), '');
+  // 외부 지표 요약: DB 뷰가 집계한 최근 적재일 값. GA4는 합계 행(total), Clarity는 URL 합산(dim_sum).
+  const latestDay = extSummary.reduce((m, e) => (e.day > m ? e.day : m), '');
+  const latestSum = extSummary.filter((e) => e.day === latestDay);
   const latest = external.filter((e) => e.day === latestDay);
   const ga4Total = (metric: string): number | null =>
-    latest.find((e) => e.source === 'ga4' && e.metric === metric && e.dim === '')?.value ?? null;
-  const claritySum = (metric: string): number | null => {
-    const rows = latest.filter((e) => e.source === 'clarity' && e.metric === metric && e.dim !== '');
-    return rows.length ? rows.reduce((n, e) => n + e.value, 0) : null;
-  };
+    latestSum.find((e) => e.source === 'ga4' && e.metric === metric)?.total ?? null;
+  const claritySum = (metric: string): number | null =>
+    latestSum.find((e) => e.source === 'clarity' && e.metric === metric)?.dim_sum ?? null;
   const clarityTop = (metric: string) =>
     latest
       .filter((e) => e.source === 'clarity' && e.metric === metric && e.dim !== '' && e.value > 0)
