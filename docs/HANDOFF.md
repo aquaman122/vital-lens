@@ -77,7 +77,7 @@
 
 4. **Discord 웹훅 URL 설정** — 웹훅 알림이 현재 no-op이다. Discord 서버에서 웹훅 URL을 만들고 Supabase Vault에 `vl_discord_webhook`으로 저장(SQL Editor에서 가능). 저장 즉시 다음 `vl-alerts` 실행(매시 5분)부터 발송된다. Supabase MCP로 하려면 대화형 세션에서 `/mcp` 재인증 필요.
 
-5. **zini-pinlog collector 갱신** — 로컬 클론이 이 머신에 없다(전체 검색 확인). 클론을 받거나 다른 머신에서 `packages/collector/dist/vital-lens.min.js`를 `public/`에 복사 후 커밋.
+5. ~~zini-pinlog collector 갱신~~ — 2026-08-27 관측 대상에서 제거됨(`sites` 삭제). 리포에 남은 부착 코드(`public/vital-lens.min.js`, `Rum.tsx`)는 클론 접근 가능할 때 걷어내면 된다 — 남아 있어도 `unknown site`로 거부돼 데이터는 안 쌓인다.
 
 6. **Vercel CLI 계정 확인 습관** — 현재 `aquaman122`로 로그인돼 있다. juntelecom 쪽(kt-market 등) 작업 전에는 `npx vercel whoami` 확인 후 필요 시 `juntell`로 재로그인.
 
